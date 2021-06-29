@@ -67,7 +67,6 @@
       } while (0)
 typedef struct
 { //定义通信结构体
-      //      char ID;
       char type;
       char type_sub[3];
       char name[T];
@@ -127,7 +126,7 @@ int main(int argc, char *argv[])
       printf("员工数据库打开成功\n");
 
       //创建员工信息表格
-      char *errmsg = NULL;
+      char *errmsg = NULL; //NO自动分配，唯一
       char sql[N] = "create table if not exists staff_info(name char primary key,age int,NO int, level int, salary int, depart char, addr char, phone char);";
 
       if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != 0)
@@ -148,7 +147,7 @@ int main(int argc, char *argv[])
       printf("普通员工帐号密码表创建成功\n");
 
       //创建考勤信息记录表
-      char sqlatd[N] = "create table if not exists attendance(name char,time char);";
+      char sqlatd[N] = "create table if not exists attendance(name char primary key,time char);";
       if (sqlite3_exec(db, sqlatd, NULL, NULL, &errmsg) != 0)
       {
             printf("sqlite3_exec:%s %d\n", errmsg, __LINE__);
@@ -534,11 +533,59 @@ int do_mod_stf(int newsfd, MSG usr, struct sockaddr_in cin, sqlite3 *db)
       //将 员工信息  从员工信息表中删除
       char sql[N] = "";
       char sqln[N] = "";
-
+      char **pres = NULL;
       char *errmsg = NULL;
+
       if (strcmp(usr.type_sub, NAME) == 0)
       {
             printf("修改姓名\n");
+            sprintf(sqln, "select * from staff_info where NO=%d;", usr.NO);
+            char temp_name[20] = "";
+            int row, column;
+            //行     列`
+            if (sqlite3_get_table(db, sqln, &pres, &row, &column, &errmsg) != 0)
+            {
+                  printf("sqlite3_get_table:%s %d\n", errmsg, __LINE__);
+                  memset(&usr, 0, sizeof(usr));
+                  strcpy(usr.text, "modify_ops error");
+                  if (send(newsfd, &usr, sizeof(usr), 0) < 0)
+                        ERR_LOG("send");
+                  printf("modify_ops error\n");
+                  return -1;
+            }
+            printf("row = %d, column = %d\n", row, column);
+            printf("pres[%d] = %s\n", (1 * column), pres[1 * column]);
+            strcpy(temp_name, pres[1 * column]); //从staff_info表中提取name
+            printf("temp_name = %s\n", temp_name);
+            bzero(sqln, sizeof(sqln));
+            sprintf(sqln, "update usrinfo set name='%s' where name='%s';", usr.name, temp_name);
+
+            printf("sqln = %s %d\n", sqln, __LINE__);
+            if (sqlite3_exec(db, sqln, NULL, NULL, &errmsg) != 0)
+            {
+                  printf("sqlite3_exec:%s %d\n", errmsg, __LINE__);
+                  memset(&usr, 0, sizeof(usr));
+                  strcpy(usr.text, "modify_ops error");
+                  if (send(newsfd, &usr, sizeof(usr), 0) < 0)
+                        ERR_LOG("send");
+                  printf("modify_ops error\n");
+                  return -1;
+            }
+            /* if (sqlite3_get_table(db, sqln, &pres, &row, &column, &errmsg) != 0)
+            {
+                  printf("sqlite3_get_table:%s %d\n", errmsg, __LINE__);
+                  memset(&usr, 0, sizeof(usr));
+                  strcpy(usr.text, "modify_ops error");
+                  if (send(newsfd, &usr, sizeof(usr), 0) < 0)
+                        ERR_LOG("send");
+                  printf("modify_ops error\n");
+                  return -1;
+            }
+            printf("row = %d, column = %d\n", row, column);
+            strcpy(pres[1 * column], usr.name);
+            printf("pres[%d] = %s\n", (1 * column), pres[1 * column]); */
+            sqlite3_free_table(pres);
+
             sprintf(sql, "update staff_info set name='%s' where NO=%d;", usr.name, usr.NO);
       }
       else if (strcmp(usr.type_sub, PSWD) == 0)
@@ -599,6 +646,7 @@ int do_mod_stf(int newsfd, MSG usr, struct sockaddr_in cin, sqlite3 *db)
             else
                   sprintf(sql, "update staff_info set phone='%s' where name='%s';", usr.pho, usr.name);
       }
+
       printf("sql = %s %d\n", sql, __LINE__);
       if (sqlite3_exec(db, sql, NULL, NULL, &errmsg) != 0)
       {
@@ -664,11 +712,6 @@ int do_search(int newsfd, MSG usr, struct sockaddr_in cin, sqlite3 *db) //查询
       {
             for (list = 0; list < column; list++)
             {
-                  /*  if (strcmp(pres[line * column], usr.name) == 0 || (strcmp(usr.type_sub, ALLINFO) == 0 || strcmp(usr.type_sub, ALLATTEND) == 0)) //printf("第line(1~row+1)行读取\n");
-                  { */
-
-                  /* memset(&usr, 0, sizeof(usr));
-                        usr.type = SEAR; //恢复指令位 */
                   if (strcmp(usr.type_sub, PRIVATEINFO) == 0 || strcmp(usr.type_sub, ALLINFO) == 0)
                   {
                         if (list == 0)
